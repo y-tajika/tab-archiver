@@ -2,15 +2,11 @@
  * Popup Script
  */
 
-import { loadBookmarkTree, getFolderPath, buildFolderTree, createNewFolder, startRenameFolder } from './folder-utils.js';
-
 (function() {
   'use strict';
 
   const elements = {};
   const excludedTabIds = new Set(); // 除外されたタブIDを記録
-  let selectedTempFolderId = null; // 一時的に選択された保存先フォルダID
-  let bookmarkTreeData = null; // フォルダツリーのキャッシュ
 
   function showError(message) {
     const container = elements.container || document.querySelector('.container');
@@ -59,10 +55,6 @@ import { loadBookmarkTree, getFolderPath, buildFolderTree, createNewFolder, star
       } else {
         throw new Error('タブ情報を取得できませんでした');
       }
-      
-      // デフォルトの保存先フォルダパスを表示
-      await loadDefaultFolderPath();
-      
     } catch (error) {
       console.error('初期化エラー:', error);
       elements.folderNameInput.value = 'エラーが発生しました';
@@ -212,8 +204,7 @@ import { loadBookmarkTree, getFolderPath, buildFolderTree, createNewFolder, star
       const response = await chrome.runtime.sendMessage({
         action: 'saveWithCustomName',
         folderName: folderName,
-        excludedTabIds: Array.from(excludedTabIds), // Setを配列に変換
-        tempFolderId: selectedTempFolderId // 一時保存先フォルダID
+        excludedTabIds: Array.from(excludedTabIds) // Setを配列に変換
       });
       
       if (response && response.failed > 0) {
@@ -248,207 +239,6 @@ import { loadBookmarkTree, getFolderPath, buildFolderTree, createNewFolder, star
     }
   }
 
-  // フォルダ選択機能
-  
-  async function loadDefaultFolderPath() {
-    try {
-      const tree = await loadBookmarkTree();
-      bookmarkTreeData = tree[0];
-      
-      const result = await chrome.storage.local.get(['useCustomFolder', 'targetFolderId']);
-      
-      let folderId = null;
-      
-      // カスタムフォルダが設定されている場合
-      if (result.useCustomFolder && result.targetFolderId) {
-        folderId = result.targetFolderId;
-      } else {
-        // デフォルト: TabArchiveフォルダを探す
-        folderId = searchFolder(tree, 'TabArchive');
-        
-        if (!folderId) {
-          // その他のブックマークを探す
-          const otherBookmarks = findOtherBookmarks(tree);
-          if (otherBookmarks) {
-            folderId = otherBookmarks;
-          }
-        }
-      }
-      
-      if (folderId) {
-        const folderPath = getFolderPath(tree, folderId);
-        if (folderPath) {
-          document.getElementById('saveFolderPath').placeholder = folderPath;
-        }
-      }
-    } catch (error) {
-      console.error('デフォルトフォルダパスの読み込みエラー:', error);
-    }
-  }
-  
-  function searchFolder(tree, folderName) {
-    function search(nodes) {
-      for (const node of nodes) {
-        if (node.title === folderName && node.children !== undefined) {
-          return node.id;
-        }
-        if (node.children) {
-          const found = search(node.children);
-          if (found) return found;
-        }
-      }
-      return null;
-    }
-    return search(tree);
-  }
-  
-  function findOtherBookmarks(tree) {
-    function search(nodes) {
-      for (const node of nodes) {
-        if (node.title === 'その他のブックマーク' || node.title === 'Other Bookmarks') {
-          return node.id;
-        }
-        if (node.children) {
-          const found = search(node.children);
-          if (found) return found;
-        }
-      }
-      return null;
-    }
-    return search(tree);
-  }
-  
-  async function openFolderModal() {
-    const modal = document.getElementById('folderModal');
-    const container = document.getElementById('folderTreeContainer');
-    const selectBtn = document.getElementById('selectFolderBtn');
-    
-    container.innerHTML = '<p>ブックマークツリーを読み込み中...</p>';
-    modal.style.display = 'block';
-    
-    try {
-      const tree = await loadBookmarkTree();
-      if (!tree || tree.length === 0) {
-        throw new Error('ブックマークツリーが空です');
-      }
-      
-      if (!tree[0] || !tree[0].children) {
-        throw new Error('ブックマークツリーの構造が不正です');
-      }
-      
-      bookmarkTreeData = tree[0];
-      container.innerHTML = '';
-      
-      // 状態オブジェクトとコールバックを渡す
-      const state = {
-        selectedFolderId: selectedTempFolderId,
-        selectBtnElement: selectBtn
-      };
-      
-      buildFolderTree(
-        container,
-        tree[0].children,
-        0,
-        state,
-        (folderId) => {
-          selectedTempFolderId = folderId;
-        },
-        async (folderId, newTitle) => {
-          // フォルダ名変更後の処理（特に何もしない）
-        }
-      );
-    } catch (error) {
-      console.error('openFolderModal error:', error);
-      container.innerHTML = '<p>エラー: ブックマークの読み込みに失敗しました</p>';
-    }
-  }
-
-  async function handleNewFolder() {
-    const newFolder = await createNewFolder(selectedTempFolderId, async (folder) => {
-      // ツリー再読み込み前に展開状態を保存
-      const container = document.getElementById('folderTreeContainer');
-      const expandedFolderIds = new Set();
-      container.querySelectorAll('.folder-children').forEach(childContainer => {
-        if (childContainer.style.display !== 'none') {
-          const parentItem = childContainer.previousElementSibling;
-          if (parentItem && parentItem.dataset.folderId) {
-            expandedFolderIds.add(parentItem.dataset.folderId);
-          }
-        }
-      });
-      
-      // ツリーを再読み込み
-      const tree = await loadBookmarkTree();
-      if (!tree || !tree[0] || !tree[0].children) {
-        console.error('handleNewFolder: invalid tree structure', tree);
-        return;
-      }
-      bookmarkTreeData = tree[0];
-      const selectBtn = document.getElementById('selectFolderBtn');
-      container.innerHTML = '';
-      
-      // 状態オブジェクトを作成
-      const state = {
-        selectedFolderId: folder.id,
-        selectBtnElement: selectBtn
-      };
-      
-      buildFolderTree(
-        container,
-        tree[0].children,
-        0,
-        state,
-        (folderId) => {
-          selectedTempFolderId = folderId;
-        },
-        async (folderId, newTitle) => {
-          // フォルダ名変更後の処理（特に何もしない）
-        }
-      );
-      
-      // 展開状態を復元
-      expandedFolderIds.forEach(folderId => {
-        const item = container.querySelector(`[data-folder-id="${folderId}"]`);
-        if (item) {
-          const wrapper = item.parentElement;
-          const childrenContainer = wrapper.querySelector('.folder-children');
-          const toggle = item.querySelector('.folder-toggle');
-          if (childrenContainer && toggle) {
-            childrenContainer.style.display = 'block';
-            toggle.textContent = '▼';
-          }
-        }
-      });
-      
-      // 作成したフォルダを選択状態にする
-      selectedTempFolderId = folder.id;
-      const newItem = container.querySelector(`[data-folder-id="${folder.id}"]`);
-      if (newItem) {
-        newItem.classList.add('selected');
-        newItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        
-        // 自動的にリネームモードに入る
-        setTimeout(() => {
-          startRenameFolder(newItem, async (folderId, newTitle) => {
-            // フォルダ名変更後の処理（特に何もしない）
-          });
-        }, 100);
-      }
-    });
-  }
-  
-  function closeFolderModal() {
-    document.getElementById('folderModal').style.display = 'none';
-  }
-
-  function selectFolder() {
-    if (selectedTempFolderId && bookmarkTreeData) {
-      const folderPath = getFolderPath([bookmarkTreeData], selectedTempFolderId);
-      document.getElementById('saveFolderPath').value = folderPath || '選択済み';
-    }
-    closeFolderModal();
-  }
-
   document.addEventListener('DOMContentLoaded', () => {
     elements.container = document.querySelector('.container');
     elements.appTitle = document.getElementById('appTitle');
@@ -463,22 +253,6 @@ import { loadBookmarkTree, getFolderPath, buildFolderTree, createNewFolder, star
     elements.saveBtn.addEventListener('click', handleSave);
     elements.cancelBtn.addEventListener('click', handleCancel);
     elements.folderNameInput.addEventListener('keypress', handleKeyPress);
-    
-    // フォルダ選択ボタン
-    const browseBtn = document.getElementById('browseSaveFolderBtn');
-    if (browseBtn) browseBtn.onclick = openFolderModal;
-    
-    const closeBtn = document.getElementById('closeModalBtn');
-    if (closeBtn) closeBtn.onclick = closeFolderModal;
-    
-    const cancelBtn = document.getElementById('cancelModalBtn');
-    if (cancelBtn) cancelBtn.onclick = closeFolderModal;
-    
-    const selectBtn = document.getElementById('selectFolderBtn');
-    if (selectBtn) selectBtn.onclick = selectFolder;
-    
-    const newFolderBtn = document.getElementById('newFolderBtn');
-    if (newFolderBtn) newFolderBtn.onclick = handleNewFolder;
   });
 
 })();
