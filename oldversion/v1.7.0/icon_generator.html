@@ -1,0 +1,99 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Tab Logger Icon Generator</title>
+</head>
+<body>
+    <h2>Tab Logger アイコン生成</h2>
+    <div id="canvases"></div>
+    <button onclick="downloadIcons()">アイコンダウンロード</button>
+    
+    <script>
+        const sizes = [16, 48, 128];
+        
+        function createIcon(size) {
+            const canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            
+            // 背景 - 青グラデーション
+            const gradient = ctx.createLinearGradient(0, 0, size, size);
+            gradient.addColorStop(0, '#4A90E2');
+            gradient.addColorStop(1, '#357ABD');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, size, size);
+            
+            // フォルダアイコン (下部)
+            const folderSize = size * 0.5;
+            const folderX = size * 0.25;
+            const folderY = size * 0.4;
+            
+            ctx.fillStyle = '#FFF';
+            ctx.globalAlpha = 0.9;
+            
+            // フォルダタブ
+            ctx.fillRect(folderX, folderY, folderSize * 0.4, folderSize * 0.2);
+            // フォルダ本体
+            ctx.fillRect(folderX, folderY + folderSize * 0.2, folderSize, folderSize * 0.6);
+            
+            // カレンダー/時計アイコン (右上)
+            ctx.globalAlpha = 1.0;
+            const clockSize = size * 0.35;
+            const clockX = size * 0.55;
+            const clockY = size * 0.25;
+            
+            // 時計の円
+            ctx.strokeStyle = '#FFF';
+            ctx.lineWidth = Math.max(1, size / 32);
+            ctx.beginPath();
+            ctx.arc(clockX + clockSize/2, clockY + clockSize/2, clockSize/2, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            // 時計の針
+            ctx.beginPath();
+            ctx.moveTo(clockX + clockSize/2, clockY + clockSize/2);
+            ctx.lineTo(clockX + clockSize/2, clockY + clockSize/4);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(clockX + clockSize/2, clockY + clockSize/2);
+            ctx.lineTo(clockX + clockSize * 0.7, clockY + clockSize/2);
+            ctx.stroke();
+            
+            return canvas;
+        }
+        
+        function downloadIcons() {
+            sizes.forEach(size => {
+                const canvas = createIcon(size);
+                canvas.toBlob(blob => {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `icon${size}.png`;
+                    a.click();
+                });
+            });
+        }
+        
+        // プレビュー表示
+        const container = document.getElementById('canvases');
+        sizes.forEach(size => {
+            const div = document.createElement('div');
+            div.style.display = 'inline-block';
+            div.style.margin = '10px';
+            div.style.textAlign = 'center';
+            
+            const canvas = createIcon(size);
+            div.appendChild(canvas);
+            
+            const label = document.createElement('div');
+            label.textContent = `${size}x${size}`;
+            div.appendChild(label);
+            
+            container.appendChild(div);
+        });
+    </script>
+</body>
+</html>

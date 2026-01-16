@@ -1,0 +1,25 @@
+# Node modules（使用していなければ不要）
+node_modules/
+npm-debug.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Chrome extension specific
+*.crx
+*.pem
+
+# Development
+.env
+*.log
+
+# Backup versions（oldversionは履歴保存用に含める場合がある）
+# 含めたくない場合はコメント解除:
+# oldversion/

@@ -1,0 +1,27 @@
+﻿{
+  "manifest_version": 3,
+  "name": "Tab Logger: Date_Folder_With Summary",
+  "version": "1.6.0",
+  "description": "開いているタブを新規フォルダへ一括ブックマーク。フォルダ名は<日付>_<タブ要約>で作成します。",
+  "permissions": [
+    "bookmarks",
+    "tabs",
+    "storage"
+  ],
+  "action": {
+    "default_title": "Tab Logger (Alt+Shift+S)",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "options_page": "options.html",
+  "commands": {
+    "bookmark_all_tabs": {
+      "suggested_key": {
+        "default": "Alt+Shift+S"
+      },
+      "description": "現在のウィンドウの全タブをフォルダへ保存 (Alt+Shift+S)"
+    }
+  }
+}

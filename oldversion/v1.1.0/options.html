@@ -1,0 +1,120 @@
+
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <title>Tab Logger 設定</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, 'Noto Sans JP', sans-serif; margin: 24px; }
+    label { display:block; margin: 8px 0 4px; }
+    input[type=text], select { width: 360px; padding: 6px; }
+    .row { margin: 8px 0; }
+    .hint { color: #555; font-size: 12px; }
+    .flex { display:flex; gap: 16px; align-items:center; }
+  </style>
+</head>
+<body>
+  <h1>Tab Logger 設定</h1>
+  <div class="row">
+    <label>フォルダの日付フォーマット</label>
+    <input id="dateFormat" type="text" placeholder="YYYY-MM-DD">
+  </div>
+  <div class="row flex">
+    <label><input id="includeTime" type="checkbox"> 時刻（HHmm）を付与</label>
+  </div>
+  <div class="row">
+    <label>フォルダ要約 最大文字数</label>
+    <input id="folderSummaryMaxChars" type="text" placeholder="40">
+  </div>
+  <div class="row">
+    <label>ブックマーク名の形式</label>
+    <select id="bookmarkTitleFormat">
+      <option value="title">タイトルのみ</option>
+      <option value="domain-title">ドメイン — タイトル</option>
+      <option value="title-summary">タイトル — 簡易要約</option>
+    </select>
+  </div>
+  <div class="row">
+    <label>タイトル最大文字数</label>
+    <input id="maxTitleLength" type="text" placeholder="100">
+  </div>
+  <div class="row">
+    <label>保存先ルートフォルダ</label>
+    <select id="parentFolder">
+      <option value="bookmarksBar">ブックマーク バー</option>
+      <option value="otherBookmarks">その他のブックマーク</option>
+    </select>
+  </div>
+  <hr>
+  <h2>AI要約（任意）</h2>
+  <div class="row flex">
+    <label><input id="useLLM" type="checkbox"> OpenAI APIでフォルダ名用の総括要約を生成</label>
+  </div>
+  <div class="row">
+    <label>OpenAI API Key</label>
+    <input id="openaiApiKey" type="text" placeholder="sk-...">
+  </div>
+  <div class="row">
+    <label>モデル</label>
+    <input id="openaiModel" type="text" placeholder="gpt-4o-mini">
+  </div>
+  <div class="row flex">
+    <label><input id="closeTabsAfterSave" type="checkbox"> 保存後にタブを閉じる</label>
+  </div>
+  <div class="row">
+    <button id="save">保存</button>
+    <span id="status" class="hint"></span>
+  </div>
+
+<script>
+const DEFAULT_SETTINGS = {
+  language: 'ja',
+  dateFormat: 'YYYY-MM-DD',
+  includeTime: true,
+  closeTabsAfterSave: false,
+  maxTitleLength: 100,
+  folderSummaryMaxChars: 40,
+  bookmarkTitleFormat: 'title',
+  useLLM: false,
+  openaiApiKey: '',
+  openaiModel: 'gpt-4o-mini',
+  parentFolder: 'bookmarksBar'
+};
+
+function load(){
+  chrome.storage.local.get(DEFAULT_SETTINGS, s=>{
+    document.getElementById('dateFormat').value = s.dateFormat;
+    document.getElementById('includeTime').checked = s.includeTime;
+    document.getElementById('maxTitleLength').value = s.maxTitleLength;
+    document.getElementById('folderSummaryMaxChars').value = s.folderSummaryMaxChars;
+    document.getElementById('bookmarkTitleFormat').value = s.bookmarkTitleFormat;
+    document.getElementById('useLLM').checked = s.useLLM;
+    document.getElementById('openaiApiKey').value = s.openaiApiKey;
+    document.getElementById('openaiModel').value = s.openaiModel;
+    document.getElementById('parentFolder').value = s.parentFolder;
+    document.getElementById('closeTabsAfterSave').checked = s.closeTabsAfterSave;
+  });
+}
+function save(){
+  const s = {
+    dateFormat: document.getElementById('dateFormat').value || 'YYYY-MM-DD',
+    includeTime: document.getElementById('includeTime').checked,
+    maxTitleLength: parseInt(document.getElementById('maxTitleLength').value||'100',10),
+    folderSummaryMaxChars: parseInt(document.getElementById('folderSummaryMaxChars').value||'40',10),
+    bookmarkTitleFormat: document.getElementById('bookmarkTitleFormat').value,
+    useLLM: document.getElementById('useLLM').checked,
+    openaiApiKey: document.getElementById('openaiApiKey').value.trim(),
+    openaiModel: document.getElementById('openaiModel').value.trim()||'gpt-4o-mini',
+    parentFolder: document.getElementById('parentFolder').value,
+    closeTabsAfterSave: document.getElementById('closeTabsAfterSave').checked
+  };
+  chrome.storage.local.set(s, ()=>{
+    const status = document.getElementById('status');
+    status.textContent = '保存しました';
+    setTimeout(()=> status.textContent = '', 1200);
+  });
+}
+window.addEventListener('DOMContentLoaded', ()=>{ load(); document.getElementById('save').addEventListener('click', save); });
+</script>
+</body>
+</html>

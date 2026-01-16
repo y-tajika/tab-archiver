@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <title>Tab Logger 設定</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <h1>Tab Logger 設定</h1>
+
+  <div class="row">
+    <label for="dateFormat">フォルダの日付フォーマット</label>
+    <input id="dateFormat" type="text" placeholder="YYYY-MM-DD">
+    <div class="hint">例: YYYY-MM-DD → 2026-01-14</div>
+  </div>
+
+  <div class="row">
+    <label>
+      <input id="includeTime" type="checkbox">
+      時刻（HHmm）を付与
+    </label>
+    <div class="hint">チェックすると「2026-01-14 1430」のようになります</div>
+  </div>
+
+  <div class="row">
+    <label for="folderSummaryMaxChars">フォルダ要約 最大文字数</label>
+    <input id="folderSummaryMaxChars" type="text" placeholder="40">
+  </div>
+
+  <div class="row">
+    <label for="bookmarkTitleFormat">ブックマーク名の形式</label>
+    <select id="bookmarkTitleFormat">
+      <option value="title">タイトルのみ</option>
+      <option value="domain-title">ドメイン — タイトル</option>
+      <option value="title-summary">タイトル — 簡易要約</option>
+    </select>
+  </div>
+
+  <div class="row">
+    <label for="maxTitleLength">タイトル最大文字数</label>
+    <input id="maxTitleLength" type="text" placeholder="100">
+  </div>
+
+  <hr>
+
+  <h2>AI要約（任意）</h2>
+
+  <div class="row">
+    <label>
+      <input id="useLLM" type="checkbox">
+      OpenAI APIでフォルダ名用の総括要約を生成
+    </label>
+    <div class="hint">無効の場合はキーワード抽出による要約が使用されます</div>
+  </div>
+
+  <div class="row">
+    <label for="openaiApiKey">OpenAI API Key</label>
+    <input id="openaiApiKey" type="password" placeholder="sk-...">
+  </div>
+
+  <div class="row">
+    <label for="openaiModel">モデル</label>
+    <input id="openaiModel" type="text" placeholder="gpt-4o-mini">
+  </div>
+
+  <hr>
+
+  <div class="row">
+    <label>
+      <input id="closeTabsAfterSave" type="checkbox">
+      保存後にタブを閉じる
+    </label>
+  </div>
+
+  <div class="row">
+    <button id="save">保存</button>
+    <span id="status" class="hint"></span>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>

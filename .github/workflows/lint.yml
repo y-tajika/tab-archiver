@@ -1,0 +1,13 @@
+name: Lint Check
+
+on: [push, pull_request]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: ESLint Check
+        run: |
+          npm install -g eslint
+          eslint tab-archiver-extension/src/**/*.js || true
