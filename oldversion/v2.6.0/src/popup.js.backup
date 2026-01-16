@@ -7,7 +7,6 @@
 
   const elements = {};
   const excludedTabIds = new Set(); // 除外されたタブIDを記録
-  let selectedTempFolderId = null; // 一時的に選択された保存先フォルダID
 
   function showError(message) {
     const container = elements.container || document.querySelector('.container');
@@ -56,10 +55,6 @@
       } else {
         throw new Error('タブ情報を取得できませんでした');
       }
-      
-      // デフォルトの保存先フォルダパスを表示
-      await loadDefaultFolderPath();
-      
     } catch (error) {
       console.error('初期化エラー:', error);
       elements.folderNameInput.value = 'エラーが発生しました';
@@ -209,8 +204,7 @@
       const response = await chrome.runtime.sendMessage({
         action: 'saveWithCustomName',
         folderName: folderName,
-        excludedTabIds: Array.from(excludedTabIds), // Setを配列に変換
-        tempFolderId: selectedTempFolderId // 一時保存先フォルダID
+        excludedTabIds: Array.from(excludedTabIds) // Setを配列に変換
       });
       
       if (response && response.failed > 0) {
@@ -245,147 +239,6 @@
     }
   }
 
-  // フォルダ選択機能
-  let bookmarkTreeData = null;
-  
-  async function loadDefaultFolderPath() {
-    try {
-      const tree = await chrome.bookmarks.getTree();
-      bookmarkTreeData = tree[0];
-      
-      const result = await chrome.storage.local.get(['useCustomFolder', 'targetFolderId']);
-      
-      let folderId = null;
-      
-      // カスタムフォルダが設定されている場合
-      if (result.useCustomFolder && result.targetFolderId) {
-        folderId = result.targetFolderId;
-      } else {
-        // デフォルト: TabArchiveフォルダを探す
-        folderId = searchFolder(tree, 'TabArchive');
-        
-        if (!folderId) {
-          // その他のブックマークを探す
-          const otherBookmarks = findOtherBookmarks(tree);
-          if (otherBookmarks) {
-            folderId = otherBookmarks;
-          }
-        }
-      }
-      
-      if (folderId) {
-        const folderPath = getFolderPath(folderId);
-        if (folderPath) {
-          document.getElementById('saveFolderPath').placeholder = folderPath;
-        }
-      }
-    } catch (error) {
-      console.error('デフォルトフォルダパスの読み込みエラー:', error);
-    }
-  }
-  
-  function searchFolder(tree, folderName) {
-    function search(nodes) {
-      for (const node of nodes) {
-        if (node.title === folderName && node.children !== undefined) {
-          return node.id;
-        }
-        if (node.children) {
-          const found = search(node.children);
-          if (found) return found;
-        }
-      }
-      return null;
-    }
-    return search(tree);
-  }
-  
-  function findOtherBookmarks(tree) {
-    function search(nodes) {
-      for (const node of nodes) {
-        if (node.title === 'その他のブックマーク' || node.title === 'Other Bookmarks') {
-          return node.id;
-        }
-        if (node.children) {
-          const found = search(node.children);
-          if (found) return found;
-        }
-      }
-      return null;
-    }
-    return search(tree);
-  }
-  
-  async function openFolderModal() {
-    const modal = document.getElementById('folderModal');
-    const container = document.getElementById('folderTreeContainer');
-    
-    container.innerHTML = '<p>ブックマークツリーを読み込み中...</p>';
-    modal.style.display = 'block';
-    
-    try {
-      const tree = await chrome.bookmarks.getTree();
-      bookmarkTreeData = tree[0];
-      container.innerHTML = '';
-      buildFolderTree(container, tree[0].children, 0);
-    } catch (error) {
-      container.innerHTML = '<p>エラー: ブックマークの読み込みに失敗しました</p>';
-    }
-  }
-
-  function buildFolderTree(container, nodes, depth) {
-    for (const node of nodes) {
-      if (node.children) {
-        const item = document.createElement('div');
-        item.className = 'folder-item';
-        item.style.paddingLeft = `${depth * 20 + 12}px`;
-        item.textContent = '📁 ' + (node.title || '(名前なし)');
-        item.onclick = () => {
-          container.querySelectorAll('.folder-item.selected').forEach(el => el.classList.remove('selected'));
-          item.classList.add('selected');
-          selectedTempFolderId = node.id;
-        };
-        container.appendChild(item);
-        buildFolderTree(container, node.children, depth + 1);
-      }
-    }
-  }
-
-  function getFolderPath(folderId) {
-    if (!bookmarkTreeData || !folderId) return '';
-    
-    const path = [];
-    function findPath(node, targetId) {
-      if (node.id === targetId) {
-        return true;
-      }
-      if (node.children) {
-        for (const child of node.children) {
-          if (findPath(child, targetId)) {
-            path.unshift(child.title || '(名前なし)');
-            return true;
-          }
-        }
-      }
-      return false;
-    }
-    
-    findPath(bookmarkTreeData, folderId);
-    return path.join(' / ');
-  }
-  
-  function closeFolderModal() {
-    document.getElementById('folderModal').style.display = 'none';
-  }
-
-  function selectFolder() {
-    if (selectedTempFolderId) {
-      const folderPath = getFolderPath(selectedTempFolderId);
-      document.getElementById('saveFolderPath').value = folderPath || '選択済み';
-    }
-    closeFolderModal();
-  }
-
   document.addEventListener('DOMContentLoaded', () => {
     elements.container = document.querySelector('.container');
     elements.appTitle = document.getElementById('appTitle');
@@ -400,19 +253,6 @@
     elements.saveBtn.addEventListener('click', handleSave);
     elements.cancelBtn.addEventListener('click', handleCancel);
     elements.folderNameInput.addEventListener('keypress', handleKeyPress);
-    
-    // フォルダ選択ボタン
-    const browseBtn = document.getElementById('browseSaveFolderBtn');
-    if (browseBtn) browseBtn.onclick = openFolderModal;
-    
-    const closeBtn = document.getElementById('closeModalBtn');
-    if (closeBtn) closeBtn.onclick = closeFolderModal;
-    
-    const cancelBtn = document.getElementById('cancelModalBtn');
-    if (cancelBtn) cancelBtn.onclick = closeFolderModal;
-    
-    const selectBtn = document.getElementById('selectFolderBtn');
-    if (selectBtn) selectBtn.onclick = selectFolder;
   });
 
 })();
