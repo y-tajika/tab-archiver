@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "TabArchiver",
   "version": "2.6.0",
-  "description": "開いているタブを一括ブックマーク。保存時に保存先フォルダを選択、実行できます。",
+  "description": "開いているタブを一括ブックマーク。日付と要約付きフォルダ名で整理保存。",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
