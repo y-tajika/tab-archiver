@@ -34,28 +34,10 @@
 ### AI要約（LLM）
 ポップアップの ✨ ボタンで、タブタイトルからAI要約を生成できます。
 
-#### OpenRouter/Gemini 設定
-以下のどちらかでAPI設定を行います。
-
-**方法A: オプション画面**
+#### 設定（オプション画面）
 - AI要約の有効化
 - プロバイダ選択（OpenRouter / Gemini）
 - APIキー
-
-**方法B: 外部設定ファイル（推奨）**
-`tab-archiver-extension/src/ai-config.json` を作成します。
-
-例:
-{
-	"provider": "openrouter",
-	"apiKey": "sk-or-v1-..."
-}
-
-※ ai-config.json は機密情報のため、必ずGit管理から除外されます。
-
-#### OpenRouterモデル
-- 本体では `tngtech/deepseek-r1t-chimera:free` を指定しています。
-- OpenRouter側のAllowed Modelsを設定する場合は、ダッシュボードで個別モデルを許可してください。
 
 ---
 
