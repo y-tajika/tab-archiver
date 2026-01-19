@@ -500,6 +500,236 @@ async function generateFolderName() {
 
 console.log(`${APP_NAME}: イベントリスナー登録`);
 
+/**
+ * LLM API経由でタブタイトルから要約を生成
+ */
+let lastLLMRequestAt = 0;
+
+/**
+ * 外部設定ファイルからLLM設定を読み込み（存在すれば優先）
+ * 期待フォーマット: ai-config.json { "provider": "gemini|openrouter", "apiKey": "..." }
+ */
+async function loadExternalLLMConfig() {
+  try {
+    const url = chrome.runtime.getURL('ai-config.json');
+    const res = await fetch(url, { method: 'GET' });
+    if (!res.ok) return null;
+    const json = await res.json();
+    if (!json || !json.apiKey) return null;
+    return {
+      provider: (json.provider === 'openrouter' || json.provider === 'gemini') ? json.provider : 'gemini',
+      apiKey: String(json.apiKey)
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
+async function generateLLMSummary(tabs, apiKey, provider = 'gemini') {
+  try {
+    // 連打抑止（2秒クールダウン）
+    const nowMs = Date.now();
+    if (nowMs - lastLLMRequestAt < 2000) {
+      throw new Error('リクエストが多すぎます。少し待ってから再試行してください。');
+    }
+    lastLLMRequestAt = nowMs;
+
+    const titles = tabs.map(t => t.title).slice(0, 10); // 最大10タブに制限
+    
+    if (provider === 'gemini') {
+      const prompt = `以下のブラウザタブのタイトルから、作業内容を簡潔に要約してください。
+出力は40文字以内、必要なら単語をアンダースコアで区切ること。日本語OK。
+
+タブ:
+${titles.map((t, i) => `${i+1}. ${t}`).join('\n')}
+
+要約:`;
+
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{ text: prompt }]
+          }],
+          generationConfig: {
+            maxOutputTokens: 64,
+            temperature: 0.7
+          }
+        })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Gemini API error:', response.status, errorText);
+        throw new Error(`Gemini APIエラー (${response.status}): ${errorText.slice(0, 100)}`);
+      }
+
+      const data = await response.json();
+      console.log('Gemini API response:', data);
+      const summary = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+      
+      // 改行や余計な記号を除去（鍵かっこ含む）、40文字に制限
+      const cleaned = summary.replace(/[\n\r]+/g, ' ').replace(/[。、！？「」\s]+$/g, '').slice(0, 40);
+      if (!cleaned) {
+        throw new Error('要約の生成に失敗しました（空の結果が返されました）');
+      }
+      console.log('Generated summary (Gemini):', cleaned);
+      return cleaned;
+    }
+    
+    if (provider === 'openrouter') {
+      const systemPrompt = 'あなたは短い日本語の要約を生成するアシスタントです。出力は40文字以内、必要に応じて単語をアンダースコアで区切ってください。推論過程は不要で、要約のみを1行で直接出力してください。同じ語句や文の繰り返しは禁止です。';
+      const userPrompt = `以下のブラウザタブのタイトルから、作業内容を簡潔に要約せよ。要約は文字数当たりの情報量が最大になる体言止めの形で。1行のみ出力し、同じ語句の繰り返しは不可。\n\n${titles.map((t, i) => `${i+1}. ${t}`).join('\n')}`;
+
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          // OpenRouterの無料モデルに固定
+          model: 'tngtech/deepseek-r1t-chimera:free',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+          ],
+          max_tokens: 100,
+          temperature: 0.7,
+          stop: ['\n'],
+          frequency_penalty: 0.6,
+          presence_penalty: 0.3
+        })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('OpenRouter API error:', response.status, errorText);
+        if (response.status === 429) {
+          throw new Error('レート制限に達しました。しばらく待ってから再試行してください。');
+        }
+        if (response.status === 404) {
+          throw new Error('指定モデルが利用不可です。モデル設定を変更するか、時間をおいて再試行してください。');
+        }
+        throw new Error(`OpenRouter APIエラー (${response.status}): ${errorText.slice(0, 100)}`);
+      }
+
+      const data = await response.json();
+      console.log('OpenRouter API response:', data);
+      if (data?.error) {
+        const code = data.error.code;
+        const message = data.error.message || 'OpenRouterのプロバイダーエラーが発生しました。';
+        console.error('OpenRouter error payload:', data.error);
+        if (code === 524) {
+          throw new Error('プロバイダーの応答がタイムアウトしました。少し待って再試行してください。');
+        }
+        throw new Error(`${message} (code: ${code || 'unknown'})`);
+      }
+      console.log('OpenRouter choices:', JSON.stringify(data.choices, null, 2));
+      console.log('OpenRouter first choice:', data.choices?.[0]);
+      console.log('OpenRouter message:', data.choices?.[0]?.message);
+      console.log('OpenRouter content:', data.choices?.[0]?.message?.content);
+      
+      const summary = data.choices?.[0]?.message?.content?.trim() || '';
+      console.log('Extracted summary (raw):', JSON.stringify(summary));
+
+      const deduped = summary
+        .split(/\r?\n/)
+        .map(s => s.trim())
+        .filter(Boolean)
+        .filter((s, i, arr) => arr.indexOf(s) === i)
+        .join(' ');
+
+      const cleaned = deduped
+        .replace(/[\n\r]+/g, ' ')
+        .replace(/(\S+)(\s+\1)+/g, '$1')
+        .replace(/[。、！？「」\s]+$/g, '')
+        .slice(0, 40);
+      console.log('Cleaned summary:', JSON.stringify(cleaned));
+      
+      if (!cleaned) {
+        console.error('Empty summary detected. Full response:', JSON.stringify(data, null, 2));
+        throw new Error('要約の生成に失敗しました（空の結果が返されました）');
+      }
+      console.log('Generated summary (OpenRouter):', cleaned);
+      return cleaned;
+    }
+
+    throw new Error('Unsupported provider');
+    
+  } catch (error) {
+    console.error('LLM要約生成エラー:', error);
+    console.error('エラー詳細:', {
+      message: error.message,
+      stack: error.stack,
+      provider: provider,
+      tabCount: tabs.length
+    });
+    // エラーを上位に伝える（popup.jsでユーザーに表示）
+    throw error;
+  }
+}
+
+/**
+ * LLM API接続テスト
+ */
+async function testLLMAPI(apiKey, provider = 'openrouter') {
+  try {
+    const testPrompt = 'Hello';
+    
+    if (provider === 'gemini') {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{ text: testPrompt }]
+          }],
+          generationConfig: {
+            maxOutputTokens: 10
+          }
+        })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`API responded with ${response.status}: ${errorText}`);
+      }
+
+      return { success: true };
+    }
+    if (provider === 'openrouter') {
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: 'tngtech/deepseek-r1t-chimera:free',
+          messages: [
+            { role: 'user', content: testPrompt }
+          ],
+          max_tokens: 10
+        })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`API応答エラー ${response.status}: ${errorText}`);
+      }
+
+      return { success: true };
+    }
+
+    throw new Error('Unsupported provider');
+    
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
 // ショートカットキー：自動命名で即座に保存
 chrome.commands.onCommand.addListener((command) => {
   console.log(`${APP_NAME}: コマンド受信:`, command);
@@ -518,6 +748,48 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     generateFolderName().then(result => {
       sendResponse(result);
     });
+    return true; // 非同期レスポンス
+  }
+  
+  if (request.action === 'generateLLMSummary') {
+    // LLMで要約生成（外部設定ファイルがあれば優先）
+    chrome.tabs.query({ currentWindow: true }).then(async (tabs) => {
+      try {
+        let provider = request.settings?.llmProvider;
+        let apiKey = request.settings?.llmApiKey;
+
+        const external = await loadExternalLLMConfig();
+        if (external && external.apiKey) {
+          provider = external.provider || provider;
+          apiKey = external.apiKey || apiKey;
+        }
+
+        const summary = await generateLLMSummary(tabs, apiKey, provider);
+        sendResponse({ success: true, summary });
+      } catch (error) {
+        sendResponse({ success: false, error: error.message });
+      }
+    });
+    return true; // 非同期レスポンス
+  }
+  
+  if (request.action === 'testLLMAPI') {
+    // API接続テスト（外部設定ファイルがあれば優先）
+    (async () => {
+      try {
+        let provider = request.provider;
+        let apiKey = request.apiKey;
+        const external = await loadExternalLLMConfig();
+        if (external && external.apiKey) {
+          provider = external.provider || provider;
+          apiKey = external.apiKey || apiKey;
+        }
+        const result = await testLLMAPI(apiKey, provider);
+        sendResponse(result);
+      } catch (error) {
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
     return true; // 非同期レスポンス
   }
   

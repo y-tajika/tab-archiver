@@ -88,6 +88,43 @@
   </div>
 
   <div class="section">
+    <h2>AI要約（実験的機能）</h2>
+    
+    <div class="row">
+      <label>
+        <input id="enableLLMSummary" type="checkbox">
+        LLM要約を有効化
+      </label>
+      <div class="hint">保存時のポップアップで「要約生成」ボタンが使用可能になります</div>
+    </div>
+
+    <div id="llmSettingsContainer" style="display: none;">
+      <div class="row">
+        <label for="llmProvider">APIプロバイダ</label>
+        <select id="llmProvider">
+          <option value="gemini">Google Gemini (推奨・無料)</option>
+          <option value="openrouter">OpenRouter</option>
+        </select>
+      </div>
+
+      <div class="row">
+        <label for="llmApiKey">APIキー</label>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <input id="llmApiKey" type="password" placeholder="sk-..." style="flex: 1;">
+          <button id="testApiBtn" type="button">接続テスト</button>
+        </div>
+        <div class="hint">
+          <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studioでキーを取得</a>（無料、1日1,500リクエスト）
+        </div>
+      </div>
+
+      <div class="row" id="apiTestResult" style="display: none;">
+        <div id="apiTestMessage"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
     <h2>ショートカットキー</h2>
     
     <div class="row">

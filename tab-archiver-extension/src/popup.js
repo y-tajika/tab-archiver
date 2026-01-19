@@ -318,6 +318,26 @@ import { loadBookmarkTree, getFolderPath, buildFolderTree, createNewFolder, star
     return search(tree);
   }
   
+  /**
+   * 外部設定ファイルからLLM設定を読み込み（存在すれば優先）
+   * 期待フォーマット: ai-config.json { "provider": "gemini|openrouter", "apiKey": "..." }
+   */
+  async function loadExternalLLMConfig() {
+    try {
+      const url = chrome.runtime.getURL('ai-config.json');
+      const res = await fetch(url, { method: 'GET' });
+      if (!res.ok) return null;
+      const json = await res.json();
+      if (!json || !json.apiKey) return null;
+      return {
+        provider: (json.provider === 'openrouter' || json.provider === 'gemini') ? json.provider : 'gemini',
+        apiKey: String(json.apiKey)
+      };
+    } catch (e) {
+      return null;
+    }
+  }
+  
   async function openFolderModal() {
     const modal = document.getElementById('folderModal');
     const container = document.getElementById('folderTreeContainer');
@@ -463,6 +483,60 @@ import { loadBookmarkTree, getFolderPath, buildFolderTree, createNewFolder, star
     elements.saveBtn.addEventListener('click', handleSave);
     elements.cancelBtn.addEventListener('click', handleCancel);
     elements.folderNameInput.addEventListener('keypress', handleKeyPress);
+    
+    // 要約生成ボタン
+    const generateSummaryBtn = document.getElementById('generateSummaryBtn');
+    if (generateSummaryBtn) {
+      generateSummaryBtn.addEventListener('click', async () => {
+        const btn = generateSummaryBtn;
+        const originalText = btn.textContent;
+        
+        try {
+          btn.disabled = true;
+          btn.textContent = '生成中...';
+          
+          // 外部設定ファイルをチェック
+          const external = await loadExternalLLMConfig();
+          
+          // 設定を取得
+          const settings = await new Promise(resolve => {
+            chrome.storage.local.get(['enableLLMSummary', 'llmApiKey', 'llmProvider'], resolve);
+          });
+          
+          // 外部設定がなく、かつ内部設定も無効の場合はエラー
+          if (!external && !settings.enableLLMSummary) {
+            alert('LLM要約が有効になっていません。オプション設定で有効にするか、ai-config.jsonを配置してください。');
+            return;
+          }
+          
+          if (!external && !settings.llmApiKey) {
+            alert('APIキーが設定されていません。オプション設定でAPIキーを入力するか、ai-config.jsonを配置してください。');
+            return;
+          }
+          
+          // background.jsに要約生成リクエスト
+          const response = await chrome.runtime.sendMessage({
+            action: 'generateLLMSummary',
+            settings: settings
+          });
+          
+          if (response.success) {
+            // 日付 + 要約形式でフォルダ名を更新
+            const now = new Date();
+            const dateStr = elements.folderNameInput.value.split('_')[0] || `${now.getMonth()+1}-${now.getDate()}`;
+            elements.folderNameInput.value = `${dateStr}_${response.summary}`;
+          } else {
+            alert(`要約生成失敗: ${response.error}`);
+          }
+        } catch (error) {
+          console.error('Summary generation error:', error);
+          alert(`エラー: ${error.message}`);
+        } finally {
+          btn.disabled = false;
+          btn.textContent = originalText;
+        }
+      });
+    }
     
     // フォルダ選択ボタン
     const browseBtn = document.getElementById('browseSaveFolderBtn');

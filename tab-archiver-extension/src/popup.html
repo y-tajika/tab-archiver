@@ -15,7 +15,10 @@
     
     <div class="form-group">
       <label for="folderName">フォルダ名:</label>
-      <input type="text" id="folderName" placeholder="自動生成中..." />
+      <div style="display: flex; gap: 8px; align-items: center; position: relative;">
+        <input type="text" id="folderName" placeholder="自動生成中..." style="flex: 1; padding-right: 40px;" />
+        <button id="generateSummaryBtn" type="button" class="generate-summary-btn" title="LLMで要約を生成">✨</button>
+      </div>
       <div class="hint">自動生成された名前を編集できます</div>
     </div>
 

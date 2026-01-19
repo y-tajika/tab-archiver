@@ -247,6 +247,36 @@ button:disabled {
   color: #d32f2f;
 }
 
+/* 要約生成ボタン */
+.generate-summary-btn {
+  padding: 0;
+  background: none;
+  border: none;
+  color: #999;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  width: 24px;
+  height: 24px;
+  transition: opacity 0.2s, color 0.2s, transform 0.2s;
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  flex: none;
+}
+
+.generate-summary-btn:hover {
+  color: #1976d2;
+  transform: translateY(-50%) scale(1.1);
+}
+
+.generate-summary-btn:disabled {
+  color: #ccc;
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 /* フォルダ選択UI */
 .folder-select-container {
   display: flex;

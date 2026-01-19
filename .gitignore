@@ -20,6 +20,9 @@ Thumbs.db
 .env
 *.log
 
+# LLM config (do not commit)
+**/ai-config.json
+
 # Backup versions（oldversionは履歴保存用に含める場合がある）
 # 含めたくない場合はコメント解除:
 # oldversion/

@@ -54,6 +54,11 @@ async function loadSettings() {
     document.getElementById('closeTabsAfterSave').checked = settings.closeTabsAfterSave;
     document.getElementById('useCustomFolder').checked = settings.useCustomFolder;
 
+    // LLM設定の読み込み
+    document.getElementById('enableLLMSummary').checked = settings.enableLLMSummary || false;
+    document.getElementById('llmProvider').value = settings.llmProvider || 'gemini';
+    document.getElementById('llmApiKey').value = settings.llmApiKey || '';
+
     // ウィンドウ保存モードの設定
     const windowSaveMode = settings.windowSaveMode || 'current';
     if (windowSaveMode === 'all-windows') {
@@ -73,6 +78,22 @@ async function loadSettings() {
     toggleFolderSelect(settings.useCustomFolder);
     // 要約設定の表示切り替え
     toggleFolderSummary(settings.useFolderSummary);
+    // LLM設定の表示切り替え
+    toggleLLMSettings(settings.enableLLMSummary || false);
+
+    // 外部設定ファイルが存在すれば自動有効化（provider/keyは外部を優先）
+    try {
+      const external = await loadExternalLLMConfig();
+      if (external && external.apiKey) {
+        const enableChk = document.getElementById('enableLLMSummary');
+        enableChk.checked = true;
+        const providerSel = document.getElementById('llmProvider');
+        providerSel.value = external.provider || providerSel.value || 'gemini';
+        toggleLLMSettings(true);
+      }
+    } catch (e) {
+      // 無視（ファイルがない場合など）
+    }
   });
 }
 
@@ -90,6 +111,54 @@ function toggleFolderSelect(show) {
 function toggleFolderSummary(show) {
   const folderSummaryRow = document.getElementById('folderSummaryRow');
   folderSummaryRow.style.display = show ? 'block' : 'none';
+}
+
+/**
+ * LLM設定UIの表示切り替え
+ */
+function toggleLLMSettings(show) {
+  const llmSettingsContainer = document.getElementById('llmSettingsContainer');
+  llmSettingsContainer.style.display = show ? 'block' : 'none';
+}
+
+/**
+ * API接続テスト
+ */
+async function testAPIConnection() {
+  const provider = document.getElementById('llmProvider').value;
+  const apiKey = document.getElementById('llmApiKey').value.trim();
+  const resultDiv = document.getElementById('apiTestResult');
+  const messageDiv = document.getElementById('apiTestMessage');
+  
+  if (!apiKey) {
+    messageDiv.textContent = 'APIキーを入力してください';
+    messageDiv.style.color = '#d32f2f';
+    resultDiv.style.display = 'block';
+    return;
+  }
+  
+  messageDiv.textContent = '接続テスト中...';
+  messageDiv.style.color = '#666';
+  resultDiv.style.display = 'block';
+  
+  try {
+    const response = await chrome.runtime.sendMessage({
+      action: 'testLLMAPI',
+      provider: provider,
+      apiKey: apiKey
+    });
+    
+    if (response.success) {
+      messageDiv.textContent = '✓ 接続成功！APIキーは有効です';
+      messageDiv.style.color = '#2e7d32';
+    } else {
+      messageDiv.textContent = `✗ 接続失敗: ${response.error}`;
+      messageDiv.style.color = '#d32f2f';
+    }
+  } catch (error) {
+    messageDiv.textContent = `✗ テスト失敗: ${error.message}`;
+    messageDiv.style.color = '#d32f2f';
+  }
 }
 
 /**
@@ -165,6 +234,26 @@ async function handleCreateNewFolder() {
       }, 100);
     }
   });
+}
+
+/**
+ * 外部設定ファイルからLLM設定を読み込み（存在すれば優先）
+ * 期待フォーマット: ai-config.json { "provider": "gemini|openrouter", "apiKey": "..." }
+ */
+async function loadExternalLLMConfig() {
+  try {
+    const url = chrome.runtime.getURL('ai-config.json');
+    const res = await fetch(url, { method: 'GET' });
+    if (!res.ok) return null;
+    const json = await res.json();
+    if (!json || !json.apiKey) return null;
+    return {
+      provider: (json.provider === 'openrouter' || json.provider === 'gemini') ? json.provider : 'gemini',
+      apiKey: String(json.apiKey)
+    };
+  } catch (e) {
+    return null;
+  }
 }
 
 /**
@@ -255,7 +344,11 @@ function saveSettings() {
     closeTabsAfterSave: document.getElementById('closeTabsAfterSave').checked,
     useCustomFolder: document.getElementById('useCustomFolder').checked,
     targetFolderId: selectedFolderId || null,
-    windowSaveMode: document.querySelector('input[name="windowSaveMode"]:checked')?.value || 'current'
+    windowSaveMode: document.querySelector('input[name="windowSaveMode"]:checked')?.value || 'current',
+    // LLM設定
+    enableLLMSummary: document.getElementById('enableLLMSummary').checked,
+    llmProvider: document.getElementById('llmProvider').value,
+    llmApiKey: document.getElementById('llmApiKey').value.trim()
   };
 
   // カスタムフォルダ使用時にフォルダ未選択の警告
@@ -297,6 +390,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('useFolderSummary').addEventListener('change', (e) => {
     toggleFolderSummary(e.target.checked);
   });
+
+  // LLM要約使用のチェックボックス
+  document.getElementById('enableLLMSummary').addEventListener('change', (e) => {
+    toggleLLMSettings(e.target.checked);
+  });
+
+  // API接続テストボタン
+  document.getElementById('testApiBtn').addEventListener('click', testAPIConnection);
 
   // 参照ボタン
   document.getElementById('browseFolderBtn').addEventListener('click', openFolderModal);
